@@ -125,7 +125,15 @@ print("amplifier-core installed!")
                     return JSON.stringify({ content: fullContent, finish_reason: 'stop' });
                 };
                 globalThis.js_web_fetch = async (url) => {
-                    try { const r = await fetch(url); return await r.text(); }
+                    try {
+                        const r = await fetch(url, {
+                            credentials: 'omit',
+                            redirect: 'error',
+                            referrerPolicy: 'no-referrer',
+                        });
+                        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                        return await r.text();
+                    }
                     catch (e) { return `Error: ${e.message}`; }
                 };
 
