@@ -1,4 +1,7 @@
+import base64
 import importlib.util
+import re
+import subprocess
 import sys
 import types
 import unittest
@@ -191,7 +194,44 @@ class BrowserRuntimeSecurityTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(url=url):
                 self.assertIsNotNone(runtime._validate_web_fetch_url(url))
 
-        self.assertIsNone(runtime._validate_web_fetch_url("https://example.com/data"))
+        allowed = [
+            "https://example.com/data",
+            "https://8.8.8.8/dns-query",
+            "https://[2606:4700:4700::1111]/dns-query",
+        ]
+        for url in allowed:
+            with self.subTest(url=url):
+                self.assertIsNone(runtime._validate_web_fetch_url(url))
+
+    async def test_web_fetch_rejects_browser_normalized_local_aliases(self):
+        aliases = [
+            "https://2130706433/",
+            "https://127.1/",
+            "https://0x7f000001/",
+            "https://0177.0.0.1/",
+            "https://127.0.0.1\\example.com/",
+            "https://2130706433\\example.com/",
+            "https://%6cocalhost/",
+            "https://ｌｏｃａｌｈｏｓｔ/",
+        ]
+        bridge_calls = []
+
+        async def record_bridge_call(url):
+            bridge_calls.append(url)
+            return "unexpected"
+
+        original_bridge = runtime.js_web_fetch
+        runtime.js_web_fetch = record_bridge_call
+        try:
+            tool = runtime.BrowserWebTool()
+            for url in aliases:
+                with self.subTest(url=url):
+                    self.assertIsNotNone(runtime._validate_web_fetch_url(url))
+                    result = await tool.execute(url=url)
+                    self.assertFalse(result.success)
+            self.assertEqual(bridge_calls, [])
+        finally:
+            runtime.js_web_fetch = original_bridge
 
     async def test_untrusted_tool_output_cannot_trigger_second_tool_call(self):
         injected_call = (
@@ -278,6 +318,36 @@ class BrowserRuntimeSecurityTests(unittest.IsolatedAsyncioTestCase):
             message.content for message in second_provider.requests[0].messages
         ]
         self.assertNotIn("A tool-derived answer.", second_turn_contents)
+
+
+class BrowserRuntimeExampleTests(unittest.TestCase):
+    def test_embedded_runtime_matches_source(self):
+        root = Path(__file__).parents[1]
+        source = (root / "src" / "amplifier_webruntime.py").read_bytes()
+        html = (root / "examples" / "minimal-webllm-chat.html").read_text()
+        match = re.search(
+            r'<script id="amplifier-browser-py" type="text/plain">\s*(.*?)\s*</script>',
+            html,
+            flags=re.DOTALL,
+        )
+
+        self.assertIsNotNone(match)
+        self.assertEqual(base64.b64decode(match.group(1), validate=True), source)
+
+    def test_example_builder_is_idempotent(self):
+        root = Path(__file__).parents[1]
+        example = root / "examples" / "minimal-webllm-chat.html"
+        before = example.read_bytes()
+
+        subprocess.run(
+            [sys.executable, str(root / "scripts" / "build-examples.py")],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(example.read_bytes(), before)
 
 
 if __name__ == "__main__":

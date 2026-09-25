@@ -40,6 +40,9 @@ def _validate_web_fetch_url(url: Any) -> str | None:
     """Return an error for URLs that are unsafe to fetch from the browser."""
     if not isinstance(url, str) or not url:
         return "URL is required"
+    # Browsers treat backslashes as path separators in HTTPS URLs; urlsplit does not.
+    if "\\" in url:
+        return "URL is invalid"
 
     try:
         parsed = urlsplit(url)
@@ -57,12 +60,19 @@ def _validate_web_fetch_url(url: Any) -> str | None:
         return "URL port is invalid"
 
     hostname = parsed.hostname.rstrip(".").lower()
+    if "%" in hostname or not hostname.isascii():
+        return "URL hostname is invalid"
     if hostname == "localhost" or hostname.endswith(".localhost"):
         return "Local network URLs are not allowed"
 
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
+        final_label = hostname.rsplit(".", 1)[-1]
+        if final_label.isdecimal() or re.fullmatch(
+            r"0x[0-9a-f]+", final_label, flags=re.IGNORECASE
+        ):
+            return "URL hostname is invalid"
         return None
 
     if not address.is_global:
