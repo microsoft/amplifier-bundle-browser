@@ -533,7 +533,11 @@ class AmplifierWeb {
     };
     
     globalThis.js_web_fetch = async (url) => {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        credentials: 'omit',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+      });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

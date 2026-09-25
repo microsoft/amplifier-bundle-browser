@@ -2,7 +2,7 @@
 """
 Build script to regenerate HTML examples with fresh base64 encodings.
 
-This ensures the embedded amplifier_browser.py is always in sync with source.
+This ensures the embedded amplifier_webruntime.py is always in sync with source.
 """
 
 import base64
@@ -31,8 +31,8 @@ def update_example(html_path: Path, wheel_b64: str | None = None):
     # Read the HTML
     html = html_path.read_text()
     
-    # Encode amplifier_browser.py
-    browser_py = SRC_DIR / "amplifier_browser.py"
+    # Encode amplifier_webruntime.py
+    browser_py = SRC_DIR / "amplifier_webruntime.py"
     if not browser_py.exists():
         print(f"ERROR: {browser_py} not found")
         sys.exit(1)
@@ -53,7 +53,7 @@ def update_example(html_path: Path, wheel_b64: str | None = None):
     # Write back
     html_path.write_text(new_html)
     print(f"Updated {html_path.name}:")
-    print(f"  - amplifier_browser.py: hash={browser_hash}")
+    print(f"  - amplifier_webruntime.py: hash={browser_hash}")
     
     return True
 
